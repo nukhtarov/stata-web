@@ -1,13 +1,14 @@
 import { StataError } from '../../data/dataset';
 import type { CommandDef } from '../command';
 import { words } from '../parser';
-import { requireEst } from './_util';
+import { requireEst, selectRows } from './_util';
 
 export const predictCmd: CommandDef = {
   name: 'predict',
   min: 7,
   args: 'newvar',
-  syntax: 'predict newvar [, xb | residuals]',
+  ifin: true,
+  syntax: 'predict newvar [if] [in] [, xb | residuals]',
   summary: 'прогноз или остатки последней регрессии',
   options: [
     { name: 'xb', help: 'прогноз ŷ (по умолчанию)' },
@@ -31,7 +32,11 @@ export const predictCmd: CommandDef = {
     const cons = m.coefs[m.coefs.length - 1].b;
     const bs = m.usedNames.map((n) => m.coefs.find((c) => c.name === n)!.b);
     const y = ctx.ds.num(m.depvar);
+    // вне if/in — missing, как в Stata
+    const inSel = new Array(ctx.ds.N).fill(false);
+    for (const i of selectRows(ctx, p)) inSel[i] = true;
     const out = new Array(ctx.ds.N).fill(NaN).map((_, i) => {
+      if (!inSel[i]) return NaN;
       let s = cons;
       for (let j = 0; j < cols.length; j++) {
         const v = cols[j][i];

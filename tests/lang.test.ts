@@ -110,3 +110,16 @@ describe('syntax', () => {
     expect(strtoname('a'.repeat(40)).length).toBe(32);
   });
 });
+
+describe('predict if/in', () => {
+  it('predict e if …, resid — вне условия missing', async () => {
+    const s = await loaded();
+    await s.run('reg Price Gini Density');
+    const r = await s.run('predict e if Capital == 1, resid');
+    expect(r.ok).toBe(true);
+    const cap = s.ds.num('Capital');
+    const e = s.ds.num('e');
+    expect(e.every((v, i) => (cap[i] === 1 ? !Number.isNaN(v) : Number.isNaN(v)))).toBe(true);
+    expect(JSON.stringify(r.blocks)).toContain(`(${cap.filter((c) => c !== 1).length} missing values generated)`);
+  });
+});
