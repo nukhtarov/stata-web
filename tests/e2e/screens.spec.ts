@@ -7,7 +7,7 @@ const OUT = process.env.SHOTS;
 test.skip(!OUT, 'только по запросу: SHOTS=dir');
 
 test('screens', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('./');
   const chooser = page.waitForEvent('filechooser');
   await page.getByTestId('open-excel').click();
   await (await chooser).setFiles(XLSX);

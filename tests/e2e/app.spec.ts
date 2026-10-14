@@ -5,7 +5,7 @@ const XLSX = fileURLToPath(new URL('../../public/demo/housing_demo.xlsx', import
 const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
 
 async function load(page: Page) {
-  await page.goto('/');
+  await page.goto('./');
   const chooser = page.waitForEvent('filechooser');
   await page.getByTestId('open-excel').click();
   await (await chooser).setFiles(XLSX);
@@ -18,14 +18,14 @@ test('загрузка Excel через кнопку', async ({ page }) => {
 });
 
 test('кнопка «Пример данных»', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('./');
   await page.getByTestId('open-demo').click();
   await expect(page.getByTestId('variables')).toContainText('Mortgage_PC');
   await expect(page.getByTestId('card').first()).toContainText('(20 vars, 48 obs)');
 });
 
 test('drag & drop файла', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('./');
   const buf = (await import('node:fs')).readFileSync(XLSX).toString('base64');
   const dt = await page.evaluateHandle(async (b64) => {
     const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
@@ -93,7 +93,7 @@ test('история ↑ и ошибка в стиле Stata', async ({ page }) 
 });
 
 test('переключение темы', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('./');
   const before = await page.evaluate(() => document.documentElement.dataset.theme);
   await page.getByTestId('theme-toggle').click();
   const after = await page.evaluate(() => document.documentElement.dataset.theme);
