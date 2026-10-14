@@ -66,8 +66,18 @@ export type ResultData =
       white: boolean;
     }
   | { kind: 'summarize'; rows: { name: string; N: number; mean: number; sd: number; min: number; max: number }[]; residVar?: string; residMaxAbs?: number }
-  | { kind: 'correlate'; names: string[]; R: number[][]; N: number }
-  | { kind: 'graph'; graph: 'scatter' | 'twoway' | 'kdensity' | 'acprplot' | 'rvfplot'; x?: string; y?: string; normal?: boolean; lowess?: boolean; slope?: number; bw?: number }
+  | {
+      kind: 'correlate';
+      names: string[];
+      R: number[][];
+      N: number;
+      /** pwcorr: p-значения, уровень star(), попарное удаление пропусков */
+      P?: number[][];
+      star?: number;
+      pairwise?: boolean;
+    }
+  | { kind: 'sktest'; rows: { name: string; N: number; pSkew: number; pKurt: number; chi2: number; p: number }[]; isResid: boolean }
+  | { kind: 'graph'; graph: 'scatter' | 'twoway' | 'kdensity' | 'acprplot' | 'rvfplot' | 'qnorm'; x?: string; y?: string; normal?: boolean; lowess?: boolean; slope?: number; bw?: number }
   | { kind: 'describe'; N: number; k: number }
   | { kind: 'import'; nvars: number; nobs: number; commaNumeric: string[] }
   | { kind: 'predict'; name: string; what: 'xb' | 'resid' }

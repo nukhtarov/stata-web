@@ -17,6 +17,17 @@ export function regressTable(m: OLSResult): string {
   const row = (name: string, ss: number, df: number, ms: number) =>
     padL(name, 12) + ' |' + padL(fmtG(ss, 11), 12) + padL(String(df), 10) + padL(fmtG(ms, 11), 12);
   const sep = '-------------+----------------------------------';
+  if (m.vce === 'robust') {
+    // Stata 14: шапка без ANOVA-таблицы, без Adj R-squared
+    L.push(padR('Linear regression', 48) + hdr('Number of obs', fmtInt(m.N)));
+    L.push(' '.repeat(48) + hdr(`F(${m.dfm}, ${m.dfr})`, fmtF(m.F, 2)));
+    L.push(' '.repeat(48) + hdr('Prob > F', fmtF(m.pF, 4)));
+    L.push(' '.repeat(48) + hdr('R-squared', fmtF(m.r2, 4)));
+    L.push(' '.repeat(48) + hdr('Root MSE', fmtG(m.rmse, 10, 5)));
+    L.push('');
+    L.push(coefTable(m));
+    return L.join('\n');
+  }
   L.push('      Source |       SS           df       MS   ' + hdr('Number of obs', fmtInt(m.N)));
   L.push(sep + hdr(`F(${m.dfm}, ${m.dfr})`, fmtF(m.F, 2)));
   L.push(row('Model', m.mss, m.dfm, m.dfm > 0 ? m.mss / m.dfm : NaN) + hdr('Prob > F', fmtF(m.pF, 4)));
@@ -31,6 +42,7 @@ export function regressTable(m: OLSResult): string {
 export function coefTable(m: OLSResult): string {
   const L: string[] = [];
   L.push(DASH78);
+  if (m.vce === 'robust') L.push('             |               Robust');
   L.push(padL(abbrev(m.depvar), 12) + ' |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]');
   L.push('-------------+----------------------------------------------------------------');
   for (const c of m.coefs) {

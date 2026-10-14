@@ -5,8 +5,8 @@ export const ASSUMPTIONS: { id: AssumptionId; title: string; how: string }[] = [
   { id: 'P1', title: 'Правильная спецификация модели', how: 'linktest, ovtest, acprplot' },
   { id: 'P2', title: 'Нет сильной мультиколлинеарности', how: 'vif' },
   { id: 'P3', title: 'Среднее ошибок равно нулю', how: 'predict e, resid → sum e' },
-  { id: 'P4', title: 'Гомоскедастичность (одинаковый разброс ошибок)', how: 'estat hettest, rvfplot' },
-  { id: 'P5', title: 'Нормальность ошибок', how: 'swilk e, kdensity e, normal' },
+  { id: 'P4', title: 'Гомоскедастичность (одинаковый разброс ошибок)', how: 'estat hettest, estat imtest, rvfplot' },
+  { id: 'P5', title: 'Нормальность ошибок', how: 'swilk e, sktest e, kdensity e, normal, qnorm e' },
 ];
 
 export interface AssumptionState {
@@ -21,7 +21,8 @@ export interface AssumptionState {
 export function collectAssumptions(cards: CommandResult[]): AssumptionState[] {
   let start = 0;
   cards.forEach((c, i) => {
-    if (c.data?.kind === 'regress') start = i;
+    // робастная оценка той же модели не сбрасывает уже сделанные проверки
+    if (c.data?.kind === 'regress' && c.data.m.vce !== 'robust') start = i;
   });
   const bySrc = new Map<string, AssumptionUpdate>();
   for (const c of cards.slice(start)) for (const a of c.explain?.assumptions ?? []) bySrc.set(a.id + ':' + a.source, a);
@@ -39,7 +40,10 @@ export function collectAssumptions(cards: CommandResult[]): AssumptionState[] {
 
 /** Шаблонный общий вывод из всех результатов */
 export function buildConclusion(cards: CommandResult[]): string {
-  const reg = [...cards].reverse().find((c) => c.data?.kind === 'regress');
+  const isReg = (c: CommandResult) => c.data?.kind === 'regress';
+  const isRobust = (c: CommandResult) => c.data?.kind === 'regress' && c.data.m.vce === 'robust';
+  // основная модель — последняя обычная регрессия; робастная оценка после неё — дополнение
+  const reg = [...cards].reverse().find((c) => isReg(c) && !isRobust(c)) ?? [...cards].reverse().find(isReg);
   const parts: string[] = [];
   if (reg?.explain?.report) parts.push(reg.explain.report);
   else parts.push('Регрессия ещё не построена — выполните reg.');
@@ -47,6 +51,7 @@ export function buildConclusion(cards: CommandResult[]): string {
   const checked = states.filter((s) => s.status !== 'unknown');
   for (const c of cards.slice(cards.indexOf(reg!) + 1)) {
     if (c.explain?.assumptions?.length && c.explain.report) parts.push(c.explain.report);
+    else if (isRobust(c) && c !== reg && c.explain?.report) parts.push(c.explain.report);
   }
   if (checked.length) {
     const ok = states.filter((s) => s.status === 'ok').map((s) => s.id.replace('P', 'П'));

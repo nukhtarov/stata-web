@@ -16,11 +16,14 @@ import { linktestCmd } from './linktest';
 import { listCmd } from './list';
 import { ovtestCmd } from './ovtest';
 import { predictCmd } from './predict';
+import { pwcorrCmd } from './pwcorr';
+import { qnormCmd } from './qnorm';
 import { regressCmd } from './regress';
 import { renameCmd } from './rename';
 import { rvfplotCmd } from './rvfplot';
 import { summarizeCmd } from './summarize';
 import { swilkCmd } from './swilk';
+import { sktestCmd } from './sktest';
 import { scatterCmd, twowayCmd } from './twoway';
 import { vifCmd } from './vif';
 
@@ -46,14 +49,17 @@ COMMANDS.push(
   listCmd,
   summarizeCmd,
   correlateCmd,
+  pwcorrCmd,
   regressCmd,
   predictCmd,
   linktestCmd,
   ovtestCmd,
   vifCmd,
   swilkCmd,
+  sktestCmd,
   estatCmd,
   kdensityCmd,
+  qnormCmd,
   twowayCmd,
   scatterCmd,
   acprplotCmd,

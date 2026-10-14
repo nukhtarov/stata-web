@@ -1,4 +1,5 @@
 // Описательная статистика по формулам Stata (summarize, correlate).
+import { ttail } from './distributions';
 import { mean } from './linalg';
 
 /** Перцентиль Stata (без весов): P = N·p/100; целое ⇒ среднее x[P], x[P+1]; иначе x[⌈P⌉] */
@@ -94,4 +95,11 @@ export function correlate(cols: number[][]): number[][] {
       R[i][j] = R[j][i] = s / (ss[i] * ss[j]);
     }
   return R;
+}
+
+/** p-значение коэффициента корреляции (как в pwcorr): 2·ttail(n−2, |r|·√(n−2)/√(1−r²)) */
+export function corrSig(r: number, n: number): number {
+  if (!Number.isFinite(r) || n < 3) return NaN;
+  if (Math.abs(r) >= 1) return 0;
+  return Math.min(1, 2 * ttail((Math.abs(r) * Math.sqrt(n - 2)) / Math.sqrt(1 - r * r), n - 2));
 }

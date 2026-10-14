@@ -94,6 +94,30 @@ export function explain(d: ResultData, _s?: Ctx): Explanation | undefined {
         assumptions: d.isResid ? [{ id: 'P5', status: ok ? 'ok' : 'bad', source: 'swilk', note: `Shapiro–Wilk ${pw(r.p)}` }] : undefined,
       };
     }
+    case 'sktest': {
+      const r = d.rows[0];
+      const ok = r.p >= 0.05;
+      const parts: string[] = [];
+      if (r.pSkew < 0.05) parts.push('асимметрия (распределение перекошено в одну сторону)');
+      if (r.pKurt < 0.05) parts.push('эксцесс (слишком острая вершина или «тяжёлые хвосты» — выбросы)');
+      const who = d.isResid ? 'остатков ' : '';
+      return {
+        verdict: ok ? 'good' : 'bad',
+        title: ok ? 'Распределение не отличается от нормального' : 'Распределение отличается от нормального',
+        text: [
+          `sktest проверяет${d.isResid ? ' П5 —' : ''} нормальность ${d.isResid ? 'остатков' : `значений ${r.name}`} по двум признакам: асимметрии (Pr(Skewness)) и эксцессу (Pr(Kurtosis)). Главный — совместный тест Prob>chi2. H0: распределение нормальное.`,
+          ok
+            ? `Prob>chi2 ${pEq(r.p)}, это не меньше 0,05 — отличий от нормального распределения нет.`
+            : `Prob>chi2 ${pEq(r.p)}, это меньше 0,05 — распределение отличается от нормального.${parts.length ? ` Проблема — ${parts.join(' и ')}.` : ''} Посмотрите qnorm и kdensity, проверьте выбросы, попробуйте логарифм зависимой переменной.`,
+          `По отдельности: асимметрия p ${pEq(r.pSkew)}, эксцесс p ${pEq(r.pKurt)}.`,
+          MAIN_RULE,
+        ],
+        report: ok
+          ? `Тест на асимметрию и эксцесс (sktest): adj chi2(2) = ${Number.isNaN(r.chi2) ? '—' : num(r.chi2)}, Prob>chi2 = ${num(r.p, 4)} > 0,05 — гипотеза о нормальном распределении ${who}не отвергается${d.isResid ? ', предпосылка П5 выполняется' : ''}.`
+          : `Тест на асимметрию и эксцесс (sktest): adj chi2(2) = ${Number.isNaN(r.chi2) ? 'очень велик' : num(r.chi2)}, Prob>chi2 = ${num(r.p, 4)} < 0,05 — гипотеза о нормальном распределении ${who}отвергается${d.isResid ? ', предпосылка П5 нарушена' : ''}.`,
+        assumptions: d.isResid ? [{ id: 'P5', status: ok ? 'ok' : 'bad', source: 'sktest', note: `Skewness/Kurtosis ${pw(r.p)}` }] : undefined,
+      };
+    }
     case 'hettest': {
       const ok = d.p >= 0.05;
       return {
@@ -173,9 +197,14 @@ function regress(m: import('../stats/ols').OLSResult): Explanation {
   } else text.push('Ни один фактор не значим по отдельности (у всех P>|t| ≥ 0,05).');
   if (insig.length) text.push(`Незначимы (P>|t| ≥ 0,05): ${insig.map((c) => c.name).join(', ')} — их влияние статистически не подтверждено.`);
   if (m.omitted.length) text.push(`Исключены из-за коллинеарности (точная линейная зависимость от других факторов): ${m.omitted.join(', ')}.`);
+  if (m.vce === 'robust')
+    text.unshift(
+      'Это регрессия с робастными (устойчивыми, Huber–White) стандартными ошибками. Коэффициенты и R² те же, что в обычной регрессии; меняются Std. Err., t, P>|t|, доверительные интервалы и F-тест — они остаются верными и при гетероскедастичности (нарушении П4). Выводы о значимости делайте по этой таблице.',
+    );
   text.push('_cons (константа) — значение при всех факторах, равных нулю; её обычно не интерпретируют.');
   text.push(MAIN_RULE);
   const report =
+    (m.vce === 'robust' ? 'С учётом робастных стандартных ошибок: ' : '') +
     `Построена регрессия ${m.depvar} на ${live.length} ${live.length === 1 ? 'фактор' : live.length < 5 ? 'фактора' : 'факторов'} (N = ${m.N}). ` +
     (ok
       ? `Модель значима в целом: F(${m.dfm}, ${m.dfr}) = ${num(m.F)}, Prob > F = ${num(m.pF, 4)} < 0,05. `
@@ -268,7 +297,19 @@ function correlate(d: Extract<ResultData, { kind: 'correlate' }>): Explanation {
     const pairs: string[] = [];
     for (let i = 1; i < d.names.length; i++) for (let j = 1; j < i; j++) if (Math.abs(d.R[i][j]) >= 0.7) pairs.push(`${d.names[j]}–${d.names[i]} (${num(d.R[i][j])})`);
     if (pairs.length) text.push(`Сильно связаны между собой факторы: ${pairs.slice(0, 6).join(', ')}${pairs.length > 6 ? ' и др.' : ''}. Это сигнал возможной мультиколлинеарности — проверьте vif после регрессии.`);
+    if (d.P) {
+      const lvl = d.star ?? 0.05;
+      const lv = num(lvl, String(lvl).split('.')[1]?.length ?? 2);
+      const sig = d.names.slice(1).filter((_, i) => d.P![i + 1][0] <= lvl);
+      const ns = d.names.slice(1).filter((_, i) => !(d.P![i + 1][0] <= lvl));
+      text.push(
+        `Значимость (H0: корреляция равна нулю)${d.star !== undefined ? ' — звёздочка стоит там, где p ≤ ' + lv : ''}. ` +
+          (sig.length ? `С ${dep} значимо связаны: ${sig.join(', ')}. ` : `Ни один фактор не связан с ${dep} значимо. `) +
+          (ns.length ? `Связь не подтверждается (p > ${lv}): ${ns.join(', ')}.` : ''),
+      );
+    }
   }
+  if (d.pairwise) text.push('pwcorr считает каждую пару по своим наблюдениям без пропусков, поэтому число наблюдений в парах может различаться (покажите его опцией obs). В регрессию попадут только наблюдения без пропусков во всех переменных.');
   return { verdict: 'info', title: 'Корреляционная матрица', text };
 }
 
@@ -308,6 +349,16 @@ function graph(d: Extract<ResultData, { kind: 'graph' }>): Explanation {
           d.lowess
             ? 'Красная прямая — линейная зависимость, синяя кривая (lowess) — как данные идут на самом деле. Синяя близка к красной — хорошо, связь линейная. Синяя заметно изгибается (дуга, S-образно) — связь нелинейная, попробуйте добавить квадрат фактора или логарифм.'
             : 'Добавьте опцию lowess, чтобы увидеть сглаженную кривую и сравнить её с прямой.',
+        ],
+      };
+    case 'qnorm':
+      return {
+        verdict: 'info',
+        title: 'Как читать квантильный график',
+        text: [
+          `Каждая точка — одно значение ${d.x}: по вертикали — фактическое, по горизонтали — каким оно было бы при нормальном распределении с тем же средним и разбросом.`,
+          'Хорошо: точки лежат на прямой. Концы загибаются в разные стороны (слева вниз, справа вверх) — «тяжёлые хвосты», выбросы. Все точки идут дугой — асимметрия.',
+          'График — подсказка «на глаз»; формальный вывод о нормальности (П5) делайте по swilk или sktest.',
         ],
       };
     case 'rvfplot':

@@ -39,6 +39,8 @@ export interface OLSResult {
   y: number[];
   /** V = s²(X'X)^-1 в порядке [usedNames..., _cons] */
   V: number[][];
+  /** тип стандартных ошибок; robust — HC1 (regress, vce(robust)) */
+  vce?: 'robust';
 }
 
 /**

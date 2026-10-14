@@ -101,3 +101,27 @@ test('переключение темы', async ({ page }) => {
   const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   expect(bg).toBe(after === 'dark' ? 'rgb(18, 22, 28)' : 'rgb(243, 245, 248)');
 });
+
+test('pwcorr, qnorm, sktest и reg …, robust', async ({ page }) => {
+  await load(page);
+  const run = async (cmd: string) => {
+    await page.getByTestId('cmdline').click();
+    await page.keyboard.type(cmd);
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('card').last()).toContainText('. ' + cmd);
+  };
+  await run('pwcorr Price Gini Density, star(0.05)');
+  await expect(page.getByTestId('card').last()).toContainText('*');
+  await run('reg Price Gini HOR URate Density');
+  await run('predict e, resid');
+  await run('qnorm e');
+  await expect(page.getByTestId('graph')).toHaveCount(1);
+  await expect(page.getByTestId('card').last()).toContainText('Inverse Normal');
+  await run('sktest e');
+  await expect(page.getByTestId('card').last()).toContainText('Skewness/Kurtosis tests for Normality');
+  await run('reg Price Gini HOR URate Density, robust');
+  await expect(page.getByTestId('card').last()).toContainText('Linear regression');
+  await expect(page.getByTestId('card').last()).toContainText('Robust');
+  await expect(page.getByTestId('results')).not.toContainText('r(19');
+});

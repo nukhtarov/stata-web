@@ -1,7 +1,7 @@
-// Пост-оценочные тесты: linktest, ovtest, vif, swilk, hettest, imtest.
+// Пост-оценочные тесты и тесты нормальности: linktest, ovtest, vif, swilk, sktest, hettest, imtest.
 import { ols, type OLSResult } from './ols';
 import { qrSolve, mean, sumSq } from './linalg';
-import { chi2tail, Ftail, invnormal, normal } from './distributions';
+import { chi2tail, erfc, Ftail, invnormal, normal } from './distributions';
 
 // ---------------------------------------------------------------- linktest
 export function linktest(m: OLSResult): OLSResult {
@@ -221,4 +221,70 @@ export function imtest(m: OLSResult): ImtestResult {
   const skewR = row(skew, p);
   const kurtR = row(kurt, 1);
   return { het: hetR, skew: skewR, kurt: kurtR, total: row(het + skew + kurt, hetDf + p + 1), N, saturated };
+}
+
+// ---------------------------------------------------------------- sktest
+export interface SktestResult {
+  name: string;
+  N: number;
+  pSkew: number;
+  pKurt: number;
+  /** adj chi2(2) (или K² при noadjust); NaN — «.» */
+  chi2: number;
+  p: number;
+}
+
+/**
+ * D'Agostino, Belanger, D'Agostino (1990) с поправкой Royston (1991c) — формулы из [R] sktest.
+ * g1, b2 — асимметрия и эксцесс как в summarize, detail (моменты с делителем n).
+ */
+export function sktest(x: number[], name = 'x', adjust = true): SktestResult {
+  const n = x.length;
+  const m = mean(x);
+  let m2 = 0;
+  let m3 = 0;
+  let m4 = 0;
+  for (const v of x) {
+    const d = v - m;
+    m2 += d * d;
+    m3 += d * d * d;
+    m4 += d * d * d * d;
+  }
+  m2 /= n;
+  m3 /= n;
+  m4 /= n;
+  const g1 = m3 / m2 ** 1.5;
+  const b2 = m4 / (m2 * m2);
+
+  const Y = g1 * Math.sqrt(((n + 1) * (n + 3)) / (6 * (n - 2)));
+  const beta2 = (3 * (n * n + 27 * n - 70) * (n + 1) * (n + 3)) / ((n - 2) * (n + 5) * (n + 7) * (n + 9));
+  const W2 = -1 + Math.sqrt(2 * (beta2 - 1));
+  const alpha = Math.sqrt(2 / (W2 - 1));
+  const ya = Y / alpha;
+  const Z1 = (1 / Math.sqrt(Math.log(Math.sqrt(W2)))) * Math.log(ya + Math.sqrt(ya * ya + 1));
+
+  const Eb2 = (3 * (n - 1)) / (n + 1);
+  const varb2 = (24 * n * (n - 2) * (n - 3)) / ((n + 1) ** 2 * (n + 3) * (n + 5));
+  const X = (b2 - Eb2) / Math.sqrt(varb2);
+  const sb1 = ((6 * (n * n - 5 * n + 2)) / ((n + 7) * (n + 9))) * Math.sqrt((6 * (n + 3) * (n + 5)) / (n * (n - 2) * (n - 3)));
+  const A = 6 + (8 / sb1) * (2 / sb1 + Math.sqrt(1 + 4 / (sb1 * sb1)));
+  const t = (1 - 2 / A) / (1 + X * Math.sqrt(2 / (A - 4)));
+  const Z2 = (1 - 2 / (9 * A) - Math.cbrt(t)) / Math.sqrt(2 / (9 * A));
+
+  const pSkew = erfc(Math.abs(Z1) / Math.SQRT2);
+  const pKurt = erfc(Math.abs(Z2) / Math.SQRT2);
+  const K2 = Z1 * Z1 + Z2 * Z2;
+  if (!adjust) return { name, N: n, pSkew, pKurt, chi2: K2, p: chi2tail(K2, 2) };
+
+  const ln = Math.log(n);
+  const Zc = -invnormal(Math.exp(-0.5 * K2));
+  const Zt = 0.55 * n ** 0.2 - 0.21;
+  const a1 = (-5 + 3.46 * ln) * Math.exp(-1.37 * ln);
+  const b1 = 1 + (0.854 - 0.148 * ln) * Math.exp(-0.55 * ln);
+  const a2 = a1 - (2.13 / (1 - 2.37 * ln)) * Zt;
+  const bb2 = 2.13 / (1 - 2.37 * ln) + b1;
+  const Z = Zc < -1 ? Zc : Zc < Zt ? a1 + b1 * Zc : a2 + bb2 * Zc;
+  const P = 0.5 * erfc(Z / Math.SQRT2);
+  const chi2 = -2 * Math.log(P);
+  return { name, N: n, pSkew, pKurt, chi2: Number.isFinite(chi2) ? chi2 : NaN, p: P };
 }
